@@ -1,10 +1,12 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { ArrowLeft, Plus, Search, Edit, Trash2, Eye } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { workcentersApi } from "@/lib/api-axios"
 
 interface WorkCenter {
   id: string
@@ -21,54 +23,42 @@ interface WorkCenter {
 export function WorkCenterList({ onBack }: { onBack: () => void }) {
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedWorkCenter, setSelectedWorkCenter] = useState<WorkCenter | null>(null)
+  const [workCenters, setWorkCenters] = useState<WorkCenter[]>([])
+  const [newOpen, setNewOpen] = useState(false)
+  const [isCreating, setIsCreating] = useState(false)
+  const [createError, setCreateError] = useState("")
+  const [newWC, setNewWC] = useState({
+    name: "",
+    code: "",
+    tag: "",
+    alternative_workcenters: "",
+    cost_per_hour: "",
+    capacity_time_efficiency: "",
+    oee_target: "",
+    status: "Active",
+  })
 
-  // Mock data for work centers
-  const workCenters: WorkCenter[] = [
-    {
-      id: "1",
-      name: "Assembly 1",
-      code: "WC-001",
-      tag: "A1-MAIN",
-      alternativeWorkcenters: ["Assembly 2", "Assembly 3"],
-      costPerHour: 85.50,
-      capacityTimeEfficiency: 92.5,
-      oeeTarget: 85.0,
-      status: "Active"
-    },
-    {
-      id: "2", 
-      name: "Drill 1",
-      code: "WC-002",
-      tag: "D1-DRILL",
-      alternativeWorkcenters: ["Drill 2"],
-      costPerHour: 65.00,
-      capacityTimeEfficiency: 88.0,
-      oeeTarget: 80.0,
-      status: "Active"
-    },
-    {
-      id: "3",
-      name: "CNC Machine 1",
-      code: "WC-003", 
-      tag: "CNC-001",
-      alternativeWorkcenters: ["CNC Machine 2"],
-      costPerHour: 120.00,
-      capacityTimeEfficiency: 95.2,
-      oeeTarget: 90.0,
-      status: "Maintenance"
-    },
-    {
-      id: "4",
-      name: "Paint Booth 1",
-      code: "WC-004",
-      tag: "PB-001",
-      alternativeWorkcenters: [],
-      costPerHour: 75.00,
-      capacityTimeEfficiency: 78.5,
-      oeeTarget: 75.0,
-      status: "Active"
+  useEffect(() => {
+    const load = async () => {
+      const res = await workcentersApi.listWorkCenters()
+      if (res.data) {
+        setWorkCenters(
+          res.data.map((w) => ({
+            id: w.id.toString(),
+            name: w.name,
+            code: w.code,
+            tag: w.tag || "",
+            alternativeWorkcenters: w.alternative_workcenters || [],
+            costPerHour: w.cost_per_hour || 0,
+            capacityTimeEfficiency: w.capacity_time_efficiency || 0,
+            oeeTarget: w.oee_target || 0,
+            status: (w.status as any) || "Active",
+          }))
+        )
+      }
     }
-  ]
+    void load()
+  }, [])
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -139,10 +129,111 @@ export function WorkCenterList({ onBack }: { onBack: () => void }) {
           </Button>
           <h2 className="text-2xl font-bold">Work Center List</h2>
         </div>
-        <Button className="bg-blue-600 hover:bg-blue-700">
-          <Plus className="w-4 h-4 mr-2" />
-          New Work Center
-        </Button>
+        <Dialog open={newOpen} onOpenChange={setNewOpen}>
+          <DialogTrigger asChild>
+            <Button className="bg-blue-600 hover:bg-blue-700">
+              <Plus className="w-4 h-4 mr-2" />
+              New Work Center
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Create Work Center</DialogTitle>
+              <DialogDescription>Creates a work center in the backend.</DialogDescription>
+            </DialogHeader>
+
+            {createError ? <div className="text-sm text-red-600">{createError}</div> : null}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Name</label>
+                <Input value={newWC.name} onChange={(e) => setNewWC({ ...newWC, name: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Code</label>
+                <Input value={newWC.code} onChange={(e) => setNewWC({ ...newWC, code: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Tag</label>
+                <Input value={newWC.tag} onChange={(e) => setNewWC({ ...newWC, tag: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Status</label>
+                <Select value={newWC.status} onValueChange={(v) => setNewWC({ ...newWC, status: v as any })}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Active">Active</SelectItem>
+                    <SelectItem value="Inactive">Inactive</SelectItem>
+                    <SelectItem value="Maintenance">Maintenance</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-sm font-medium">Alternative Workcenters (comma separated)</label>
+                <Input
+                  value={newWC.alternative_workcenters}
+                  onChange={(e) => setNewWC({ ...newWC, alternative_workcenters: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setNewOpen(false)} disabled={isCreating}>
+                Cancel
+              </Button>
+              <Button
+                className="bg-blue-600 hover:bg-blue-700"
+                disabled={isCreating}
+                onClick={async () => {
+                  setCreateError("")
+                  if (!newWC.name || !newWC.code) {
+                    setCreateError("Name and code are required")
+                    return
+                  }
+                  setIsCreating(true)
+                  const payload = {
+                    name: newWC.name,
+                    code: newWC.code,
+                    tag: newWC.tag,
+                    alternative_workcenters: newWC.alternative_workcenters
+                      ? newWC.alternative_workcenters.split(",").map((s) => s.trim()).filter(Boolean)
+                      : [],
+                    cost_per_hour: newWC.cost_per_hour ? Number(newWC.cost_per_hour) : null,
+                    capacity_time_efficiency: newWC.capacity_time_efficiency ? Number(newWC.capacity_time_efficiency) : null,
+                    oee_target: newWC.oee_target ? Number(newWC.oee_target) : null,
+                    status: newWC.status,
+                  }
+                  const res = await workcentersApi.createWorkCenter(payload)
+                  setIsCreating(false)
+                  if (res.error || !res.data) {
+                    setCreateError("Failed to create work center")
+                    return
+                  }
+                  const created = res.data
+                  setWorkCenters((prev) => [
+                    {
+                      id: created.id.toString(),
+                      name: created.name,
+                      code: created.code,
+                      tag: created.tag || "",
+                      alternativeWorkcenters: created.alternative_workcenters || [],
+                      costPerHour: created.cost_per_hour || 0,
+                      capacityTimeEfficiency: created.capacity_time_efficiency || 0,
+                      oeeTarget: created.oee_target || 0,
+                      status: (created.status as any) || "Active",
+                    },
+                    ...prev,
+                  ])
+                  setNewOpen(false)
+                }}
+              >
+                {isCreating ? "Creating..." : "Create"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {/* Search and Filter Bar */}

@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, String, Date, Float, Boolean, ForeignKey, Enum, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
 import enum
@@ -20,6 +21,7 @@ class MaintenanceTeam(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, nullable=False) # e.g., Mechanics, IT Support [cite: 22]
+    description = Column(String)
     
     # Relationships
     members = relationship("User", back_populates="team") # Link specific users [cite: 23]
@@ -43,7 +45,10 @@ class Equipment(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False) # Equipment Name [cite: 16]
     serial_number = Column(String, unique=True) # Serial Number [cite: 16]
+    category = Column(String)
     purchase_date = Column(Date) # Purchase Date [cite: 17]
+    warranty_start_date = Column(Date)
+    warranty_end_date = Column(Date)
     warranty_info = Column(Text) # Warranty Information [cite: 17]
     location = Column(String) # Physical location [cite: 18]
     department = Column(String) # e.g., Production [cite: 11]
@@ -62,8 +67,10 @@ class MaintenanceRequest(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     subject = Column(String, nullable=False) # What is wrong? [cite: 31]
+    description = Column(Text)
     request_type = Column(Enum(RequestType), default=RequestType.CORRECTIVE) # [cite: 27]
     stage = Column(Enum(RequestStage), default=RequestStage.NEW) # Workflow stages [cite: 42, 55]
+    priority = Column(String)
     
     # Key Fields [cite: 30, 33, 34, 35]
     equipment_id = Column(Integer, ForeignKey("equipment.id"))
@@ -71,6 +78,22 @@ class MaintenanceRequest(Base):
     technician_id = Column(Integer, ForeignKey("users.id"), nullable=True) # [cite: 43]
     
     scheduled_date = Column(Date) # When should work happen? [cite: 34]
+    created_date = Column(Date)
+    completed_date = Column(Date)
     duration = Column(Float, default=0.0) # Hours spent [cite: 35, 45]
+    notes = Column(Text)
     
     equipment = relationship("Equipment", back_populates="requests")
+
+class WorkCenter(Base):
+    __tablename__ = "work_centers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    code = Column(String, unique=True)
+    tag = Column(String)
+    alternative_workcenters = Column(JSONB)
+    cost_per_hour = Column(Float)
+    capacity_time_efficiency = Column(Float)
+    oee_target = Column(Float)
+    status = Column(String)

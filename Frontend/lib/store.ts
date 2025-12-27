@@ -2,7 +2,7 @@
 
 import { create } from "zustand"
 import type { MaintenanceRequest, Equipment, Team, Technician } from "@/types"
-import { authApi, apiClient } from "./api-axios"
+import { authApi, apiClient, equipmentApi, requestsApi, teamsApi, techniciansApi } from "./api-axios"
 
 interface User {
   id: string
@@ -23,10 +23,13 @@ interface AppState {
   technicians: Technician[]
   selectedRequest: MaintenanceRequest | null
   setSelectedRequest: (request: MaintenanceRequest | null) => void
-  updateRequestStatus: (id: string, status: string) => void
+  updateRequestStatus: (id: string, status: string) => Promise<void>
   addRequest: (request: MaintenanceRequest) => void
   updateRequest: (request: MaintenanceRequest) => void
   addEquipment: (equipment: Equipment) => void
+  initializeAuth: () => Promise<void>
+  loadAppData: () => Promise<void>
+  createMaintenanceRequest: (payload: { subject: string; request_type: "Corrective" | "Preventive"; equipment_id: string; scheduled_date?: string; priority?: string; description?: string; notes?: string }) => Promise<boolean>
   login: (email: string, password: string) => Promise<boolean>
   logout: () => void
   signup: (userData: Omit<User, 'id'> & { password: string }) => Promise<boolean>
@@ -165,10 +168,18 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setSelectedRequest: (request) => set({ selectedRequest: request }),
 
-  updateRequestStatus: (id, status) =>
+  updateRequestStatus: async (id, status) => {
     set((state) => ({
       requests: state.requests.map((r) => (r.id === id ? { ...r, status: status as any } : r)),
-    })),
+    }))
+
+    const requestId = Number.parseInt(id, 10)
+    if (Number.isNaN(requestId)) {
+      return
+    }
+
+    await requestsApi.updateRequest(requestId, { stage: status })
+  },
 
   addRequest: (request) =>
     set((state) => ({
@@ -184,6 +195,173 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((state) => ({
       equipment: [...state.equipment, equipment],
     })),
+
+  loadAppData: async () => {
+    const [teamsRes, techniciansRes, equipmentRes, requestsRes] = await Promise.all([
+      teamsApi.listTeamsWithMembers(),
+      techniciansApi.listTechnicians(),
+      equipmentApi.listEquipment(),
+      requestsApi.listRequests(),
+    ])
+
+    if (teamsRes.error || techniciansRes.error || equipmentRes.error || requestsRes.error) {
+      return
+    }
+
+    const technicians: Technician[] = (techniciansRes.data || []).map((t) => ({
+      id: t.id.toString(),
+      name: t.name,
+      avatar: t.avatar_url || "👨‍🔧",
+      email: t.username,
+      phone: "",
+    }))
+
+    const teams: Team[] = (teamsRes.data || []).map((team) => ({
+      id: team.id.toString(),
+      name: team.name,
+      description: team.description || "",
+      members: (team.members || []).map((m) => ({
+        id: m.id.toString(),
+        name: m.name,
+        avatar: m.avatar_url || "👨‍🔧",
+        email: m.username,
+        phone: "",
+      })),
+    }))
+
+    const equipment: Equipment[] = (equipmentRes.data || []).map((eq) => {
+      const purchaseDate = eq.purchase_date ? String(eq.purchase_date) : new Date().toISOString().split("T")[0]
+      const warrantyStartDate = eq.warranty_start_date ? String(eq.warranty_start_date) : purchaseDate
+      const warrantyEndDate = eq.warranty_end_date ? String(eq.warranty_end_date) : purchaseDate
+
+      return {
+        id: eq.id.toString(),
+        name: eq.name,
+        serialNumber: eq.serial_number,
+        category: eq.category || "",
+        purchaseDate,
+        warranty: {
+          startDate: warrantyStartDate,
+          endDate: warrantyEndDate,
+          isActive: new Date(warrantyEndDate) >= new Date(),
+        },
+        location: eq.location || "",
+        department: eq.department || "",
+        assignedTo: eq.default_technician_id ? eq.default_technician_id.toString() : "",
+        maintenanceTeam: eq.maintenance_team_id.toString(),
+        status: eq.is_active ? "Active" : "Inactive",
+        health: undefined,
+        requestCount: eq.open_requests_count,
+      }
+    })
+
+    const equipmentById = new Map(equipment.map((e) => [e.id, e]))
+    const teamsById = new Map(teams.map((t) => [t.id, t]))
+    const techniciansById = new Map(technicians.map((t) => [t.id, t]))
+
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    const requests: MaintenanceRequest[] = (requestsRes.data || []).map((r) => {
+      const scheduledDate = r.scheduled_date ? String(r.scheduled_date) : new Date().toISOString().split("T")[0]
+      const createdDate = r.created_date ? String(r.created_date) : scheduledDate
+      const completedDate = r.completed_date ? String(r.completed_date) : undefined
+      const equipmentItem = equipmentById.get(r.equipment_id.toString())
+      const teamItem = teamsById.get(r.maintenance_team_id.toString())
+      const technicianItem = r.technician_id ? techniciansById.get(r.technician_id.toString()) : undefined
+
+      const overdue = new Date(scheduledDate) < today && r.stage !== "Repaired"
+
+      return {
+        id: r.id.toString(),
+        subject: r.subject,
+        description: r.description || "",
+        type: r.request_type,
+        status: r.stage,
+        equipment: equipmentItem || {
+          id: r.equipment_id.toString(),
+          name: "Unknown",
+          serialNumber: "",
+          category: "",
+          purchaseDate: new Date().toISOString().split("T")[0],
+          warranty: { startDate: new Date().toISOString().split("T")[0], endDate: new Date().toISOString().split("T")[0], isActive: true },
+          location: "",
+          department: "",
+          assignedTo: "",
+          maintenanceTeam: r.maintenance_team_id.toString(),
+          status: "Active",
+        },
+        assignedTeam: teamItem || { id: r.maintenance_team_id.toString(), name: "Team", description: "", members: [] },
+        assignedTo: technicianItem,
+        priority: (r.priority as any) || "Low",
+        scheduledDate,
+        createdDate,
+        completedDate,
+        duration: r.duration,
+        notes: r.notes || undefined,
+        isOverdue: overdue,
+      }
+    })
+
+    set({ teams, technicians, equipment, requests })
+  },
+
+  createMaintenanceRequest: async (payload) => {
+    const equipmentId = Number.parseInt(payload.equipment_id, 10)
+    if (Number.isNaN(equipmentId)) {
+      return false
+    }
+
+    const res = await requestsApi.createRequest({
+      subject: payload.subject,
+      request_type: payload.request_type,
+      equipment_id: equipmentId,
+      scheduled_date: payload.scheduled_date,
+      priority: payload.priority,
+      description: payload.description,
+      notes: payload.notes,
+    })
+
+    if (res.error) {
+      return false
+    }
+
+    await get().loadAppData()
+    return true
+  },
+
+  initializeAuth: async () => {
+    if (typeof window === "undefined") {
+      return
+    }
+
+    const token = localStorage.getItem("access_token")
+    if (!token) {
+      set({ user: null, isAuthenticated: false })
+      return
+    }
+
+    apiClient.setToken(token)
+
+    const userResponse = await authApi.getCurrentUser()
+    if (userResponse.data) {
+      set({
+        user: {
+          id: userResponse.data.id.toString(),
+          name: userResponse.data.name,
+          email: userResponse.data.username,
+          avatar: userResponse.data.avatar_url,
+        },
+        isAuthenticated: true,
+      })
+
+      await get().loadAppData()
+      return
+    }
+
+    apiClient.clearToken()
+    set({ user: null, isAuthenticated: false })
+  },
 
   login: async (username: string, password: string) => {
     try {
@@ -203,6 +381,8 @@ export const useAppStore = create<AppState>((set, get) => ({
             },
             isAuthenticated: true,
           });
+
+          await get().loadAppData()
           return true;
         }
       }
@@ -245,6 +425,7 @@ export const useAppStore = create<AppState>((set, get) => ({
             },
             isAuthenticated: true,
           });
+          await get().loadAppData()
           return true;
         }
       }

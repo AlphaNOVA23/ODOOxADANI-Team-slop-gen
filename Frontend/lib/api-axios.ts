@@ -1,4 +1,4 @@
-import axios, { AxiosInstance, AxiosResponse } from 'axios';
+import axios, { AxiosError, AxiosInstance, InternalAxiosRequestConfig } from 'axios';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -6,6 +6,18 @@ export interface ApiResponse<T> {
   data?: T;
   error?: string;
   status: number;
+}
+
+export interface WorkCenterResponse {
+  id: number
+  name: string
+  code: string
+  tag?: string | null
+  alternative_workcenters: string[]
+  cost_per_hour?: number | null
+  capacity_time_efficiency?: number | null
+  oee_target?: number | null
+  status?: string | null
 }
 
 class ApiClient {
@@ -36,7 +48,7 @@ class ApiClient {
   private setupInterceptors() {
     // Request interceptor to add token
     this.axiosInstance.interceptors.request.use(
-      (config) => {
+      (config: InternalAxiosRequestConfig) => {
         if (typeof window !== 'undefined') {
           const token = localStorage.getItem('access_token');
           if (token) {
@@ -45,20 +57,15 @@ class ApiClient {
         }
         return config;
       },
-      (error) => {
+      (error: AxiosError) => {
         return Promise.reject(error);
       }
     );
 
     // Response interceptor to handle errors
     this.axiosInstance.interceptors.response.use(
-      (response: AxiosResponse) => {
-        return {
-          data: response.data,
-          status: response.status,
-        };
-      },
-      (error) => {
+      (response) => response,
+      (error: AxiosError<any>) => {
         if (error.response?.status === 401) {
           // Token expired or invalid
           if (typeof window !== 'undefined') {
@@ -66,11 +73,8 @@ class ApiClient {
           }
           // You could redirect to login page here
         }
-        
-        return {
-          error: error.response?.data?.detail || error.message || 'Request failed',
-          status: error.response?.status || 0,
-        };
+
+        return Promise.reject(error);
       }
     );
   }
@@ -91,37 +95,53 @@ class ApiClient {
 
   async get<T>(endpoint: string): Promise<ApiResponse<T>> {
     try {
-      const response = await this.axiosInstance.get(endpoint);
-      return response;
+      const response = await this.axiosInstance.get<T>(endpoint);
+      return { data: response.data, status: response.status };
     } catch (error: any) {
-      return error;
+      const err = error as AxiosError<any>;
+      return {
+        error: err.response?.data?.detail || err.message || 'Request failed',
+        status: err.response?.status || 0,
+      };
     }
   }
 
   async post<T>(endpoint: string, body: any): Promise<ApiResponse<T>> {
     try {
-      const response = await this.axiosInstance.post(endpoint, body);
-      return response;
+      const response = await this.axiosInstance.post<T>(endpoint, body);
+      return { data: response.data, status: response.status };
     } catch (error: any) {
-      return error;
+      const err = error as AxiosError<any>;
+      return {
+        error: err.response?.data?.detail || err.message || 'Request failed',
+        status: err.response?.status || 0,
+      };
     }
   }
 
   async patch<T>(endpoint: string, body: any): Promise<ApiResponse<T>> {
     try {
-      const response = await this.axiosInstance.patch(endpoint, body);
-      return response;
+      const response = await this.axiosInstance.patch<T>(endpoint, body);
+      return { data: response.data, status: response.status };
     } catch (error: any) {
-      return error;
+      const err = error as AxiosError<any>;
+      return {
+        error: err.response?.data?.detail || err.message || 'Request failed',
+        status: err.response?.status || 0,
+      };
     }
   }
 
   async delete<T>(endpoint: string): Promise<ApiResponse<T>> {
     try {
-      const response = await this.axiosInstance.delete(endpoint);
-      return response;
+      const response = await this.axiosInstance.delete<T>(endpoint);
+      return { data: response.data, status: response.status };
     } catch (error: any) {
-      return error;
+      const err = error as AxiosError<any>;
+      return {
+        error: err.response?.data?.detail || err.message || 'Request failed',
+        status: err.response?.status || 0,
+      };
     }
   }
 }
@@ -147,11 +167,56 @@ export interface TokenResponse {
 }
 
 export interface User {
-  id: string;
+  id: number;
   username: string;
   name: string;
   avatar_url?: string;
-  team_id?: string;
+  team_id?: number | null;
+}
+
+export interface TeamResponse {
+  id: number
+  name: string
+  description?: string | null
+}
+
+export interface TeamWithMembersResponse extends TeamResponse {
+  members: User[]
+}
+
+export interface EquipmentResponse {
+  id: number
+  name: string
+  serial_number: string
+  category?: string | null
+  purchase_date?: string | null
+  warranty_start_date?: string | null
+  warranty_end_date?: string | null
+  warranty_info?: string | null
+  location?: string | null
+  department?: string | null
+  employee_owner?: string | null
+  is_active: boolean
+  maintenance_team_id: number
+  default_technician_id?: number | null
+  open_requests_count: number
+}
+
+export interface MaintenanceRequestResponse {
+  id: number
+  subject: string
+  description?: string | null
+  request_type: "Corrective" | "Preventive"
+  priority?: string | null
+  equipment_id: number
+  scheduled_date?: string | null
+  stage: "New" | "In Progress" | "Repaired" | "Scrap"
+  maintenance_team_id: number
+  technician_id?: number | null
+  created_date?: string | null
+  completed_date?: string | null
+  duration: number
+  notes?: string | null
 }
 
 export const authApi = {
@@ -168,6 +233,10 @@ export const authApi = {
 export const equipmentApi = {
   getEquipment: (id: number) =>
     apiClient.get<any>(`/equipment/${id}`),
+  listEquipment: () =>
+    apiClient.get<EquipmentResponse[]>("/equipment"),
+  createEquipment: (payload: any) =>
+    apiClient.post<EquipmentResponse>("/equipment", payload),
 };
 
 export const requestsApi = {
@@ -176,4 +245,24 @@ export const requestsApi = {
   
   updateRequest: (id: number, updateData: any) =>
     apiClient.patch<any>(`/requests/${id}`, updateData),
+
+  listRequests: () =>
+    apiClient.get<MaintenanceRequestResponse[]>("/requests"),
+
+  getRequest: (id: number) =>
+    apiClient.get<MaintenanceRequestResponse>(`/requests/${id}`),
 };
+
+export const teamsApi = {
+  listTeams: () => apiClient.get<TeamResponse[]>("/teams"),
+  listTeamsWithMembers: () => apiClient.get<TeamWithMembersResponse[]>("/teams/with-members"),
+}
+
+export const techniciansApi = {
+  listTechnicians: () => apiClient.get<User[]>("/technicians"),
+}
+
+export const workcentersApi = {
+  listWorkCenters: () => apiClient.get<WorkCenterResponse[]>("/workcenters"),
+  createWorkCenter: (payload: any) => apiClient.post<WorkCenterResponse>("/workcenters", payload),
+}

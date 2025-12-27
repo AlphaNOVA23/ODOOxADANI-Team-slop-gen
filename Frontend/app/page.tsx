@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Navbar } from "@/components/Navbar"
 import { Dashboard } from "@/components/Dashboard"
 import { KanbanBoard } from "@/components/KanbanBoard"
@@ -10,10 +10,15 @@ import { CalendarView } from "@/components/CalendarView"
 import { TeamsView } from "@/components/TeamsView"
 import { ReportsView } from "@/components/ReportsView"
 import { Login } from "@/components/Login"
+import { useAppStore } from "@/lib/store"
 
 export default function Page() {
   const [currentView, setCurrentView] = useState("dashboard")
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const { isAuthenticated, initializeAuth } = useAppStore()
+
+  useEffect(() => {
+    void initializeAuth()
+  }, [initializeAuth])
 
   const renderView = () => {
     switch (currentView) {
@@ -33,7 +38,7 @@ export default function Page() {
   }
 
   if (!isAuthenticated) {
-    return <Login onSuccess={() => setIsAuthenticated(true)} />
+    return <Login />
   }
 
   return (

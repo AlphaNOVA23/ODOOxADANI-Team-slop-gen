@@ -5,9 +5,24 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { RequestOverview } from "./RequestOverview"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Textarea } from "@/components/ui/textarea"
+import { useState } from "react"
 
 export function Dashboard() {
-  const { requests, equipment, teams, selectedRequest, setSelectedRequest } = useAppStore()
+  const { requests, equipment, teams, selectedRequest, setSelectedRequest, createMaintenanceRequest } = useAppStore()
+  const [newOpen, setNewOpen] = useState(false)
+  const [isCreating, setIsCreating] = useState(false)
+  const [createError, setCreateError] = useState("")
+  const [newRequest, setNewRequest] = useState({
+    subject: "",
+    request_type: "Corrective" as const,
+    equipment_id: "",
+    scheduled_date: "",
+    priority: "Low",
+    description: "",
+    notes: "",
+  })
 
   const criticalEquipment = equipment.filter(e => e.health && e.health < 30).length
   const technicianLoad = 85 // Mock data - could be calculated from team assignments
@@ -41,10 +56,150 @@ export function Dashboard() {
     <div className="space-y-6">
       {/* Action Bar */}
       <div className="flex justify-between items-center">
-        <Button className="bg-blue-600 hover:bg-blue-700">
-          <Plus className="w-4 h-4 mr-2" />
-          New
-        </Button>
+        <Dialog open={newOpen} onOpenChange={setNewOpen}>
+          <DialogTrigger asChild>
+            <Button className="bg-blue-600 hover:bg-blue-700">
+              <Plus className="w-4 h-4 mr-2" />
+              New
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Create Maintenance Request</DialogTitle>
+              <DialogDescription>Creates a new request and saves it in the backend.</DialogDescription>
+            </DialogHeader>
+
+            {createError ? (
+              <div className="text-sm text-red-600">{createError}</div>
+            ) : null}
+
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Subject</label>
+                <Input
+                  value={newRequest.subject}
+                  onChange={(e) => setNewRequest({ ...newRequest, subject: e.target.value })}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Type</label>
+                  <Select
+                    value={newRequest.request_type}
+                    onValueChange={(v) => setNewRequest({ ...newRequest, request_type: v as any })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Corrective">Corrective</SelectItem>
+                      <SelectItem value="Preventive">Preventive</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Priority</label>
+                  <Select
+                    value={newRequest.priority}
+                    onValueChange={(v) => setNewRequest({ ...newRequest, priority: v })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Low">Low</SelectItem>
+                      <SelectItem value="Medium">Medium</SelectItem>
+                      <SelectItem value="High">High</SelectItem>
+                      <SelectItem value="Critical">Critical</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Equipment</label>
+                <Select
+                  value={newRequest.equipment_id}
+                  onValueChange={(v) => setNewRequest({ ...newRequest, equipment_id: v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select equipment" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {equipment.map((eq) => (
+                      <SelectItem key={eq.id} value={eq.id}>
+                        {eq.name} ({eq.serialNumber})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Scheduled Date</label>
+                <Input
+                  type="date"
+                  value={newRequest.scheduled_date}
+                  onChange={(e) => setNewRequest({ ...newRequest, scheduled_date: e.target.value })}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Description</label>
+                <Textarea
+                  value={newRequest.description}
+                  onChange={(e) => setNewRequest({ ...newRequest, description: e.target.value })}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Notes</label>
+                <Textarea
+                  value={newRequest.notes}
+                  onChange={(e) => setNewRequest({ ...newRequest, notes: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setNewOpen(false)} disabled={isCreating}>
+                Cancel
+              </Button>
+              <Button
+                className="bg-blue-600 hover:bg-blue-700"
+                disabled={isCreating}
+                onClick={async () => {
+                  setCreateError("")
+                  if (!newRequest.subject || !newRequest.equipment_id) {
+                    setCreateError("Subject and equipment are required")
+                    return
+                  }
+                  setIsCreating(true)
+                  const ok = await createMaintenanceRequest(newRequest)
+                  setIsCreating(false)
+                  if (!ok) {
+                    setCreateError("Failed to create request")
+                    return
+                  }
+                  setNewOpen(false)
+                  setNewRequest({
+                    subject: "",
+                    request_type: "Corrective",
+                    equipment_id: "",
+                    scheduled_date: "",
+                    priority: "Low",
+                    description: "",
+                    notes: "",
+                  })
+                }}
+              >
+                {isCreating ? "Creating..." : "Create"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
         <div className="flex items-center gap-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
