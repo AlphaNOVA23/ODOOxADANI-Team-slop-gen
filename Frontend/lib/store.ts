@@ -2,7 +2,7 @@
 
 import { create } from "zustand"
 import type { MaintenanceRequest, Equipment, Team, Technician } from "@/types"
-import { authApi, apiClient, equipmentApi, requestsApi, teamsApi, techniciansApi } from "./api-axios"
+import { authApi, apiClient, equipmentApi, requestsApi, teamsApi, techniciansApi, workcentersApi } from "./api-axios"
 
 interface User {
   id: string
@@ -21,6 +21,7 @@ interface AppState {
   equipment: Equipment[]
   teams: Team[]
   technicians: Technician[]
+  workcenters: any[]
   selectedRequest: MaintenanceRequest | null
   setSelectedRequest: (request: MaintenanceRequest | null) => void
   updateRequestStatus: (id: string, status: string) => Promise<void>
@@ -30,6 +31,8 @@ interface AppState {
   initializeAuth: () => Promise<void>
   loadAppData: () => Promise<void>
   createMaintenanceRequest: (payload: { subject: string; request_type: "Corrective" | "Preventive"; equipment_id: string; scheduled_date?: string; priority?: string; description?: string; notes?: string }) => Promise<boolean>
+  updateRequestScheduledDate: (id: string, scheduled_date: string) => Promise<boolean>
+  updateRequestAssignee: (id: string, technician_id?: string, team_id?: string) => Promise<boolean>
   login: (email: string, password: string) => Promise<boolean>
   logout: () => void
   signup: (userData: Omit<User, 'id'> & { password: string }) => Promise<boolean>
@@ -164,6 +167,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   equipment: mockEquipment,
   teams: mockTeams,
   technicians: mockTechnicians,
+  workcenters: [],
   selectedRequest: null,
 
   setSelectedRequest: (request) => set({ selectedRequest: request }),
@@ -197,11 +201,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     })),
 
   loadAppData: async () => {
-    const [teamsRes, techniciansRes, equipmentRes, requestsRes] = await Promise.all([
+    const [teamsRes, techniciansRes, equipmentRes, requestsRes, workcentersRes] = await Promise.all([
       teamsApi.listTeamsWithMembers(),
       techniciansApi.listTechnicians(),
       equipmentApi.listEquipment(),
       requestsApi.listRequests(),
+      workcentersApi.listWorkCenters(),
     ])
 
     if (teamsRes.error || techniciansRes.error || equipmentRes.error || requestsRes.error) {
@@ -303,7 +308,19 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
     })
 
-    set({ teams, technicians, equipment, requests })
+    const workcenters = (workcentersRes.data || []).map((wc) => ({
+      id: wc.id.toString(),
+      name: wc.name,
+      code: wc.code,
+      tag: wc.tag,
+      alternativeWorkcenters: wc.alternative_workcenters || [],
+      costPerHour: wc.cost_per_hour || 0,
+      capacityTimeEfficiency: wc.capacity_time_efficiency || 0,
+      oeeTarget: wc.oee_target || 0,
+      status: wc.status || "Active",
+    }))
+
+    set({ teams, technicians, equipment, requests, workcenters })
   },
 
   createMaintenanceRequest: async (payload) => {
@@ -325,6 +342,32 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (res.error) {
       return false
     }
+
+    await get().loadAppData()
+    return true
+  },
+
+  updateRequestScheduledDate: async (id, scheduled_date) => {
+    const requestId = Number.parseInt(id, 10)
+    if (Number.isNaN(requestId)) return false
+
+    const res = await requestsApi.updateRequest(requestId, { scheduled_date })
+    if (res.error) return false
+
+    await get().loadAppData()
+    return true
+  },
+
+  updateRequestAssignee: async (id, technician_id, team_id) => {
+    const requestId = Number.parseInt(id, 10)
+    if (Number.isNaN(requestId)) return false
+
+    const payload: any = {}
+    if (technician_id) payload.technician_id = Number.parseInt(technician_id, 10)
+    if (team_id) payload.maintenance_team_id = Number.parseInt(team_id, 10)
+
+    const res = await requestsApi.updateRequest(requestId, payload)
+    if (res.error) return false
 
     await get().loadAppData()
     return true

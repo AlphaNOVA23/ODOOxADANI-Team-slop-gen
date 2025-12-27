@@ -73,6 +73,8 @@ class MaintenanceRequestUpdate(BaseModel):
     priority: Optional[str] = None
     description: Optional[str] = None
     notes: Optional[str] = None
+    scheduled_date: Optional[date] = None
+    maintenance_team_id: Optional[int] = None
 
 class MaintenanceRequestResponse(MaintenanceRequestBase):
     id: int

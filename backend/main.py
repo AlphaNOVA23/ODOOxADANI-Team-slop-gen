@@ -257,7 +257,7 @@ def update_request_stage(
 
     # Update fields provided by the user (Technician, Duration, or Stage) [cite: 43, 45]
     update_payload = update_data.model_dump(exclude_unset=True)
-    allowed_keys = {"technician_id", "duration", "stage", "priority", "description", "notes"}
+    allowed_keys = {"technician_id", "duration", "stage", "priority", "description", "notes", "scheduled_date", "maintenance_team_id"}
     for key, value in update_payload.items():
         if key in allowed_keys:
             setattr(db_request, key, value)

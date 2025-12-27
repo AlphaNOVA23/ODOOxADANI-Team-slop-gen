@@ -1,6 +1,6 @@
 import { useAppStore } from "@/lib/store"
 import { useState } from "react"
-import { ArrowLeft, Calendar, User, Wrench, AlertTriangle, Clock, CheckCircle, Diamond } from "lucide-react"
+import { ArrowLeft, Calendar, User, Wrench, AlertTriangle, Clock, CheckCircle, Diamond, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -9,13 +9,20 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { EquipmentCategories } from "./EquipmentCategories"
 
 export function RequestOverview() {
-  const { requests, selectedRequest, setSelectedRequest } = useAppStore()
+  const { requests, selectedRequest, setSelectedRequest, workcenters, updateRequestStatus, technicians, teams, updateRequestScheduledDate, updateRequestAssignee } = useAppStore()
   const [showEquipmentCategories, setShowEquipmentCategories] = useState(false)
   const [maintenanceFor, setMaintenanceFor] = useState<'equipment' | 'workcenter'>('equipment')
   const [selectedWorkCenter, setSelectedWorkCenter] = useState('')
+  const [isUpdating, setIsUpdating] = useState(false)
+  const [showRescheduleModal, setShowRescheduleModal] = useState(false)
+  const [showReassignModal, setShowReassignModal] = useState(false)
+  const [newScheduledDate, setNewScheduledDate] = useState('')
+  const [newTechnicianId, setNewTechnicianId] = useState('')
+  const [newTeamId, setNewTeamId] = useState('')
   
   if (!selectedRequest) return null
 
@@ -79,6 +86,26 @@ export function RequestOverview() {
       case "Scrap": return 3
       default: return 0
     }
+  }
+
+  const handleStartWork = async () => {
+    if (!request) return
+    setIsUpdating(true)
+    await updateRequestStatus(request.id, "In Progress")
+    setIsUpdating(false)
+  }
+
+  const handleReschedule = async () => {
+    if (!request) return
+    setNewScheduledDate(request.scheduledDate)
+    setShowRescheduleModal(true)
+  }
+
+  const handleReassign = async () => {
+    if (!request) return
+    setNewTechnicianId(request.assignedTo?.id || '')
+    setNewTeamId(request.assignedTeam.id || '')
+    setShowReassignModal(true)
   }
 
   return (
@@ -161,9 +188,11 @@ export function RequestOverview() {
                       <SelectValue placeholder="Select work center" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="wc1">Work Center 1</SelectItem>
-                      <SelectItem value="wc2">Work Center 2</SelectItem>
-                      <SelectItem value="wc3">Work Center 3</SelectItem>
+                      {workcenters.map((wc) => (
+                        <SelectItem key={wc.id} value={wc.id}>
+                          {wc.name} ({wc.code})
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -277,15 +306,19 @@ export function RequestOverview() {
           <div className="bg-white rounded-lg border p-6">
             <h3 className="text-lg font-semibold mb-4">Quick Actions</h3>
             <div className="space-y-3">
-              <Button className="w-full bg-blue-600 hover:bg-blue-700">
+              <Button 
+                className="w-full bg-blue-600 hover:bg-blue-700" 
+                onClick={handleStartWork}
+                disabled={isUpdating || request.status === "In Progress"}
+              >
                 <Wrench className="w-4 h-4 mr-2" />
-                Start Work
+                {isUpdating ? "Updating..." : "Start Work"}
               </Button>
-              <Button variant="outline" className="w-full">
+              <Button variant="outline" className="w-full" onClick={handleReschedule}>
                 <Calendar className="w-4 h-4 mr-2" />
                 Reschedule
               </Button>
-              <Button variant="outline" className="w-full">
+              <Button variant="outline" className="w-full" onClick={handleReassign}>
                 <User className="w-4 h-4 mr-2" />
                 Reassign
               </Button>
@@ -330,6 +363,105 @@ export function RequestOverview() {
           </div>
         </div>
       </div>
+
+      {/* Reschedule Modal */}
+      <Dialog open={showRescheduleModal} onOpenChange={setShowRescheduleModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reschedule Maintenance</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="scheduledDate">New Scheduled Date</Label>
+              <Input
+                id="scheduledDate"
+                type="date"
+                value={newScheduledDate}
+                onChange={(e) => setNewScheduledDate(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowRescheduleModal(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={async () => {
+                if (!request) return
+                setIsUpdating(true)
+                const ok = await updateRequestScheduledDate(request.id, newScheduledDate)
+                if (ok) {
+                  setShowRescheduleModal(false)
+                }
+                setIsUpdating(false)
+              }}
+              disabled={isUpdating}
+            >
+              {isUpdating ? "Updating..." : "Reschedule"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reassign Modal */}
+      <Dialog open={showReassignModal} onOpenChange={setShowReassignModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reassign Maintenance</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="team">Maintenance Team</Label>
+              <Select value={newTeamId} onValueChange={setNewTeamId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select team" />
+                </SelectTrigger>
+                <SelectContent>
+                  {teams.map((team) => (
+                    <SelectItem key={team.id} value={team.id}>
+                      {team.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="technician">Technician</Label>
+              <Select value={newTechnicianId} onValueChange={setNewTechnicianId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select technician" />
+                </SelectTrigger>
+                <SelectContent>
+                  {technicians.map((tech) => (
+                    <SelectItem key={tech.id} value={tech.id}>
+                      {tech.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowReassignModal(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={async () => {
+                if (!request) return
+                setIsUpdating(true)
+                const ok = await updateRequestAssignee(request.id, newTechnicianId || undefined, newTeamId || undefined)
+                if (ok) {
+                  setShowReassignModal(false)
+                }
+                setIsUpdating(false)
+              }}
+              disabled={isUpdating}
+            >
+              {isUpdating ? "Updating..." : "Reassign"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
