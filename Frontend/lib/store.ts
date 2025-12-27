@@ -1,7 +1,8 @@
 "use client"
 
 import { create } from "zustand"
-import type { MaintenanceRequest, Equipment, Team, Technician } from "@/Frontend/types"
+import type { MaintenanceRequest, Equipment, Team, Technician } from "@/types"
+import { authApi, apiClient } from "./api-axios"
 
 interface User {
   id: string
@@ -153,7 +154,9 @@ const mockRequests: MaintenanceRequest[] = [
   },
 ]
 
-export const useAppStore = create<AppState>((set) => ({
+export const useAppStore = create<AppState>((set, get) => ({
+  user: null,
+  isAuthenticated: false,
   requests: mockRequests,
   equipment: mockEquipment,
   teams: mockTeams,
@@ -181,4 +184,74 @@ export const useAppStore = create<AppState>((set) => ({
     set((state) => ({
       equipment: [...state.equipment, equipment],
     })),
+
+  login: async (username: string, password: string) => {
+    try {
+      const response = await authApi.login({ username, password });
+      if (response.data) {
+        apiClient.setToken(response.data.access_token);
+        
+        // Get user details
+        const userResponse = await authApi.getCurrentUser();
+        if (userResponse.data) {
+          set({
+            user: {
+              id: userResponse.data.id.toString(),
+              name: userResponse.data.name,
+              email: userResponse.data.username,
+              avatar: userResponse.data.avatar_url,
+            },
+            isAuthenticated: true,
+          });
+          return true;
+        }
+      }
+      return false;
+    } catch (error) {
+      console.error('Login failed:', error);
+      return false;
+    }
+  },
+
+  logout: () => {
+    apiClient.clearToken();
+    set({
+      user: null,
+      isAuthenticated: false,
+    });
+  },
+
+  signup: async (userData: Omit<User, 'id'> & { password: string }) => {
+    try {
+      const response = await authApi.signup({
+        username: userData.email,
+        password: userData.password,
+        name: userData.name,
+        avatar_url: userData.avatar,
+      });
+      
+      if (response.data) {
+        apiClient.setToken(response.data.access_token);
+        
+        // Get user details
+        const userResponse = await authApi.getCurrentUser();
+        if (userResponse.data) {
+          set({
+            user: {
+              id: userResponse.data.id.toString(),
+              name: userResponse.data.name,
+              email: userResponse.data.username,
+              avatar: userResponse.data.avatar_url,
+            },
+            isAuthenticated: true,
+          });
+          return true;
+        }
+      }
+      return false;
+    } catch (error) {
+      console.error('Signup failed:', error);
+      return false;
+    }
+  },
 }))

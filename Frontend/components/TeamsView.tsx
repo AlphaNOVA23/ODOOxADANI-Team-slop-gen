@@ -1,5 +1,5 @@
-import type { Team } from "@/Frontend/types"
-import { useAppStore } from "@/Frontend/lib/store"
+import type { Team } from "@/types"
+import { useAppStore } from "@/lib/store"
 import { Users } from "lucide-react"
 
 interface TeamCardProps {

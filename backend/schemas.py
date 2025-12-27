@@ -7,8 +7,14 @@ from typing import Optional
 
 # --- USER & TEAM SCHEMAS ---
 class UserBase(BaseModel):
-    name: str
+    username: str
+    name: Optional[str] = None
     avatar_url: Optional[str] = None
+    team_id: Optional[int] = None
+
+class UserResponse(UserBase):
+    id: int
+    model_config = ConfigDict(from_attributes=True)
 
 class TeamBase(BaseModel):
     name: str

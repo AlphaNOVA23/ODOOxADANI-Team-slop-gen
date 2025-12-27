@@ -1,4 +1,4 @@
-import { useAppStore } from "@/Frontend/lib/store"
+import { useAppStore } from "@/lib/store"
 import { AlertTriangle, Users, ClipboardList, Search, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"

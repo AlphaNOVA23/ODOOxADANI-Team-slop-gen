@@ -9,3 +9,4 @@ passlib[bcrypt]
 alembic
 celery
 redis
+fastapi-cors

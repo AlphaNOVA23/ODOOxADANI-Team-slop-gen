@@ -1,4 +1,4 @@
-import { useAppStore } from "@/Frontend/lib/store"
+import { useAppStore } from "@/lib/store"
 import { BarChart3, TrendingUp } from "lucide-react"
 
 export function ReportsView() {

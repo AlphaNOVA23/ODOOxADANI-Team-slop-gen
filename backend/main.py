@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 import auth, models, schemas
@@ -11,6 +12,15 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="GearGuard API")
+
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],  # Next.js default ports
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     credentials_exception = HTTPException(
@@ -42,7 +52,7 @@ def get_db():
     finally:
         db.close()
         
-@app.get("/users/me", response_model=schemas.UserCreate) # Use a schema that excludes hashed_password
+@app.get("/users/me", response_model=schemas.UserResponse)
 def read_users_me(current_user: models.User = Depends(get_current_user)):
     return current_user
 

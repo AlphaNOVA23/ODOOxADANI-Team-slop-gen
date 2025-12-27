@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useAppStore } from "@/Frontend/lib/store"
+import { useAppStore } from "@/lib/store"
 
 export function EquipmentCategories({ onBack }: { onBack: () => void }) {
   const { equipment, requests, addEquipment } = useAppStore()

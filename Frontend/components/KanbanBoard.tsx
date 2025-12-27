@@ -2,8 +2,8 @@
 
 import type React from "react"
 
-import type { MaintenanceRequest } from "@/Frontend/types"
-import { useAppStore } from "@/Frontend/lib/store"
+import type { MaintenanceRequest } from "@/types"
+import { useAppStore } from "@/lib/store"
 import { AlertCircle, Clock, CheckCircle, Trash2 } from "lucide-react"
 import { useState } from "react"
 

@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useAppStore } from "@/lib/store"
 
 type LoginProps = {
   onSuccess?: () => void
@@ -12,6 +13,10 @@ type LoginProps = {
 
 export function Login({ onSuccess }: LoginProps) {
   const [showPassword, setShowPassword] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState("")
+  const { login, signup } = useAppStore()
+  
   const [loginData, setLoginData] = useState({
     email: "",
     password: ""
@@ -25,22 +30,55 @@ export function Login({ onSuccess }: LoginProps) {
     confirmPassword: ""
   })
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
-    console.log("Login attempt:", loginData)
-    // TODO: Implement login logic
-    if (onSuccess) onSuccess()
+    setIsLoading(true)
+    setError("")
+    
+    try {
+      const success = await login(loginData.email, loginData.password)
+      if (success) {
+        if (onSuccess) onSuccess()
+      } else {
+        setError("Login failed. Please check your credentials.")
+      }
+    } catch (err) {
+      setError("Login failed. Please try again.")
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  const handleSignup = (e: React.FormEvent) => {
+  const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault()
     if (signupData.password !== signupData.confirmPassword) {
-      alert("Passwords do not match")
+      setError("Passwords do not match")
       return
     }
-    console.log("Signup attempt:", signupData)
-    // TODO: Implement signup logic
-    if (onSuccess) onSuccess()
+    
+    setIsLoading(true)
+    setError("")
+    
+    try {
+      const success = await signup({
+        name: signupData.name,
+        email: signupData.email,
+        phone: signupData.phone,
+        company: signupData.company,
+        password: signupData.password,
+        avatar: undefined
+      })
+      
+      if (success) {
+        if (onSuccess) onSuccess()
+      } else {
+        setError("Signup failed. Please try again.")
+      }
+    } catch (err) {
+      setError("Signup failed. Please try again.")
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -62,6 +100,11 @@ export function Login({ onSuccess }: LoginProps) {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {error && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md text-red-700 text-sm">
+                {error}
+              </div>
+            )}
             <Tabs defaultValue="login" className="w-full">
               <TabsList className="grid w-full grid-cols-2 mb-6">
                 <TabsTrigger value="login">Login</TabsTrigger>
@@ -119,8 +162,8 @@ export function Login({ onSuccess }: LoginProps) {
                     </a>
                   </div>
 
-                  <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700">
-                    Sign In
+                  <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700" disabled={isLoading}>
+                    {isLoading ? "Signing In..." : "Sign In"}
                   </Button>
                 </form>
               </TabsContent>
@@ -228,8 +271,8 @@ export function Login({ onSuccess }: LoginProps) {
                     <a href="#" className="text-blue-600 hover:text-blue-700">Privacy Policy</a>
                   </div>
 
-                  <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700">
-                    Create Account
+                  <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700" disabled={isLoading}>
+                    {isLoading ? "Creating Account..." : "Create Account"}
                   </Button>
                 </form>
               </TabsContent>

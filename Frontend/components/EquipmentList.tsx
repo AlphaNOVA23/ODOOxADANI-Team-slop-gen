@@ -1,6 +1,6 @@
 "use client"
 
-import { useAppStore } from "@/Frontend/lib/store"
+import { useAppStore } from "@/lib/store"
 import { ArrowLeft, Search, Plus, Edit, Trash2, Eye, Wrench } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
