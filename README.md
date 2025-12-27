@@ -4,7 +4,7 @@ GearGuard is a full-stack, Odoo-inspired maintenance management system designed 
 
 The system seamlessly connects Equipment, Maintenance Teams, and Maintenance Requests, ensuring that breakdowns and preventive maintenance are handled intelligently, securely, and on time.
 
----
+--- ndnd
 
 ## Problem Statement
 
