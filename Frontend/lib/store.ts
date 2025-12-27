@@ -28,6 +28,7 @@ interface AppState {
   addRequest: (request: MaintenanceRequest) => void
   updateRequest: (request: MaintenanceRequest) => void
   addEquipment: (equipment: Equipment) => void
+  createEquipment: (payload: { name: string; serial_number: string; category: string; department?: string; location?: string; purchase_date?: string; warranty_info?: string; maintenance_team_id?: number; default_technician_id?: number; is_active?: boolean }) => Promise<boolean>
   initializeAuth: () => Promise<void>
   loadAppData: () => Promise<void>
   createMaintenanceRequest: (payload: { subject: string; request_type: "Corrective" | "Preventive"; equipment_id: string; scheduled_date?: string; priority?: string; description?: string; notes?: string }) => Promise<boolean>
@@ -199,6 +200,14 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((state) => ({
       equipment: [...state.equipment, equipment],
     })),
+
+  createEquipment: async (payload) => {
+    const res = await equipmentApi.createEquipment(payload)
+    if (res.error) return false
+
+    await get().loadAppData()
+    return true
+  },
 
   loadAppData: async () => {
     const [teamsRes, techniciansRes, equipmentRes, requestsRes, workcentersRes] = await Promise.all([

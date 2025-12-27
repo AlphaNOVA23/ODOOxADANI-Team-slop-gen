@@ -1,5 +1,6 @@
+import { useState, useEffect } from "react"
 import { useAppStore } from "@/lib/store"
-import { AlertTriangle, Users, ClipboardList, Search, Plus } from "lucide-react"
+import { AlertTriangle, Users, ClipboardList, Search, Plus, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -7,13 +8,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { RequestOverview } from "./RequestOverview"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
-import { useState } from "react"
 
 export function Dashboard() {
-  const { requests, equipment, teams, selectedRequest, setSelectedRequest, createMaintenanceRequest } = useAppStore()
+  const { requests, equipment, teams, selectedRequest, setSelectedRequest, createMaintenanceRequest, loadAppData } = useAppStore()
   const [newOpen, setNewOpen] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
   const [createError, setCreateError] = useState("")
+  const [isLoading, setIsLoading] = useState(false)
   const [newRequest, setNewRequest] = useState({
     subject: "",
     request_type: "Corrective" as const,
@@ -23,6 +24,19 @@ export function Dashboard() {
     description: "",
     notes: "",
   })
+
+  useEffect(() => {
+    const loadData = async () => {
+      setIsLoading(true)
+      await loadAppData()
+      setIsLoading(false)
+    }
+    loadData()
+  }, [loadAppData])
+
+  // Debug info
+  console.log("Dashboard - Equipment count:", equipment.length)
+  console.log("Dashboard - Requests count:", requests.length)
 
   const criticalEquipment = equipment.filter(e => e.health && e.health < 30).length
   const technicianLoad = 85 // Mock data - could be calculated from team assignments
@@ -56,7 +70,17 @@ export function Dashboard() {
     <div className="space-y-6">
       {/* Action Bar */}
       <div className="flex justify-between items-center">
-        <Dialog open={newOpen} onOpenChange={setNewOpen}>
+        <div className="flex items-center gap-4">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => loadAppData()}
+            disabled={isLoading}
+          >
+            <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+          <Dialog open={newOpen} onOpenChange={setNewOpen}>
           <DialogTrigger asChild>
             <Button className="bg-blue-600 hover:bg-blue-700">
               <Plus className="w-4 h-4 mr-2" />
@@ -123,16 +147,23 @@ export function Dashboard() {
                 <Select
                   value={newRequest.equipment_id}
                   onValueChange={(v) => setNewRequest({ ...newRequest, equipment_id: v })}
+                  disabled={isLoading || equipment.length === 0}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select equipment" />
+                    <SelectValue placeholder={isLoading ? "Loading equipment..." : equipment.length === 0 ? "No equipment available" : "Select equipment"} />
                   </SelectTrigger>
                   <SelectContent>
-                    {equipment.map((eq) => (
-                      <SelectItem key={eq.id} value={eq.id}>
-                        {eq.name} ({eq.serialNumber})
-                      </SelectItem>
-                    ))}
+                    {equipment.length === 0 ? (
+                      <div className="px-2 py-1 text-sm text-gray-500">
+                        {isLoading ? "Loading..." : "No equipment found. Please add equipment first."}
+                      </div>
+                    ) : (
+                      equipment.map((eq) => (
+                        <SelectItem key={eq.id} value={eq.id}>
+                          {eq.name} ({eq.serialNumber})
+                        </SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -169,7 +200,7 @@ export function Dashboard() {
               </Button>
               <Button
                 className="bg-blue-600 hover:bg-blue-700"
-                disabled={isCreating}
+                disabled={isCreating || equipment.length === 0}
                 onClick={async () => {
                   setCreateError("")
                   if (!newRequest.subject || !newRequest.equipment_id) {
@@ -177,22 +208,28 @@ export function Dashboard() {
                     return
                   }
                   setIsCreating(true)
-                  const ok = await createMaintenanceRequest(newRequest)
-                  setIsCreating(false)
-                  if (!ok) {
-                    setCreateError("Failed to create request")
-                    return
+                  try {
+                    const ok = await createMaintenanceRequest(newRequest)
+                    if (!ok) {
+                      setCreateError("Failed to create request")
+                      return
+                    }
+                    setNewOpen(false)
+                    setNewRequest({
+                      subject: "",
+                      request_type: "Corrective",
+                      equipment_id: "",
+                      scheduled_date: "",
+                      priority: "Low",
+                      description: "",
+                      notes: "",
+                    })
+                  } catch (error) {
+                    console.error("Create request error:", error)
+                    setCreateError("An error occurred while creating the request")
+                  } finally {
+                    setIsCreating(false)
                   }
-                  setNewOpen(false)
-                  setNewRequest({
-                    subject: "",
-                    request_type: "Corrective",
-                    equipment_id: "",
-                    scheduled_date: "",
-                    priority: "Low",
-                    description: "",
-                    notes: "",
-                  })
                 }}
               >
                 {isCreating ? "Creating..." : "Create"}
@@ -200,6 +237,7 @@ export function Dashboard() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        </div>
         <div className="flex items-center gap-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
@@ -298,3 +336,4 @@ export function Dashboard() {
     </div>
   )
 }
+  

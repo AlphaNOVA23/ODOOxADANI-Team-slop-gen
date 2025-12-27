@@ -1,7 +1,9 @@
 "use client"
 
-import { Menu, Settings, Bell, User } from "lucide-react"
+import { Menu, Settings, Bell, User, LogOut } from "lucide-react"
 import { useState } from "react"
+import { useAppStore } from "@/lib/store"
+import { Button } from "@/components/ui/button"
 
 interface NavbarProps {
   currentView: string
@@ -10,6 +12,11 @@ interface NavbarProps {
 
 export function Navbar({ currentView, onViewChange }: NavbarProps) {
   const [showMenu, setShowMenu] = useState(false)
+  const { user, logout } = useAppStore()
+
+  const handleLogout = () => {
+    logout()
+  }
 
   const views = [
     { id: "dashboard", label: "Dashboard" },
@@ -50,10 +57,15 @@ export function Navbar({ currentView, onViewChange }: NavbarProps) {
           <button className="p-2 hover:bg-border rounded-lg transition-colors">
             <Settings size={20} />
           </button>
-          <button className="flex items-center gap-2 px-3 py-2 hover:bg-border rounded-lg transition-colors">
-            <User size={20} />
-            <span className="hidden sm:inline text-sm">Admin</span>
-          </button>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={handleLogout}
+            className="flex items-center gap-2 px-3 py-2 hover:bg-border rounded-lg transition-colors"
+          >
+            <LogOut size={20} />
+            <span className="hidden sm:inline text-sm">Logout</span>
+          </Button>
           <button className="md:hidden p-2 hover:bg-border rounded-lg" onClick={() => setShowMenu(!showMenu)}>
             <Menu size={20} />
           </button>

@@ -5,13 +5,28 @@ import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Textarea } from "@/components/ui/textarea"
+import { Label } from "@/components/ui/label"
 import { useAppStore } from "@/lib/store"
 
 export function EquipmentCategories({ onBack }: { onBack: () => void }) {
-  const { equipment, requests, addEquipment } = useAppStore()
+  const { equipment, requests, addEquipment, createEquipment, createMaintenanceRequest, teams, technicians } = useAppStore()
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedEquipment, setSelectedEquipment] = useState<any>(null)
   const [showNewEquipmentForm, setShowNewEquipmentForm] = useState(false)
+  const [isCreatingEquipment, setIsCreatingEquipment] = useState(false)
+  const [createEquipmentError, setCreateEquipmentError] = useState("")
+  const [showScheduleModal, setShowScheduleModal] = useState(false)
+  const [isScheduling, setIsScheduling] = useState(false)
+  const [scheduleData, setScheduleData] = useState({
+    subject: "",
+    request_type: "Preventive" as const,
+    scheduled_date: "",
+    priority: "Medium",
+    description: "",
+    notes: "",
+  })
   const [newEquipment, setNewEquipment] = useState({
     name: "",
     serialNumber: "",
@@ -75,42 +90,86 @@ export function EquipmentCategories({ onBack }: { onBack: () => void }) {
     setShowNewEquipmentForm(true)
   }
 
-  const handleSaveEquipment = () => {
+  const handleScheduleMaintenance = () => {
+    if (!selectedEquipment) return
+    setScheduleData({
+      subject: `Preventive Maintenance - ${selectedEquipment.name}`,
+      request_type: "Preventive",
+      scheduled_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      priority: "Medium",
+      description: "",
+      notes: "",
+    })
+    setShowScheduleModal(true)
+  }
+
+  const handleCreateScheduledRequest = async () => {
+    if (!selectedEquipment) return
+    setIsScheduling(true)
+    const success = await createMaintenanceRequest({
+      ...scheduleData,
+      equipment_id: selectedEquipment.id,
+    })
+    if (success) {
+      setShowScheduleModal(false)
+    }
+    setIsScheduling(false)
+  }
+
+  const handleSaveEquipment = async () => {
     if (!newEquipment.name || !newEquipment.serialNumber || !newEquipment.category) {
-      alert("Please fill in all required fields")
+      setCreateEquipmentError("Please fill in all required fields")
       return
     }
 
-    const equipment = {
-      id: Date.now().toString(),
-      ...newEquipment,
-      warranty: {
-        startDate: newEquipment.purchaseDate,
-        endDate: newEquipment.warranty.endDate,
-        isActive: newEquipment.warranty.isActive
-      }
-    }
+    setIsCreatingEquipment(true)
+    setCreateEquipmentError("")
 
-    addEquipment(equipment)
-    setShowNewEquipmentForm(false)
-    
-    // Reset form
-    setNewEquipment({
-      name: "",
-      serialNumber: "",
-      category: "",
-      department: "",
-      location: "",
-      status: "Active" as const,
-      health: 100,
-      maintenanceTeam: "",
-      assignedTo: "",
-      purchaseDate: new Date().toISOString().split('T')[0],
-      warranty: {
-        isActive: true,
-        endDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+    try {
+      const payload = {
+        name: newEquipment.name,
+        serial_number: newEquipment.serialNumber,
+        category: newEquipment.category,
+        department: newEquipment.department || undefined,
+        location: newEquipment.location || undefined,
+        purchase_date: newEquipment.purchaseDate || undefined,
+        warranty_info: newEquipment.warranty.isActive 
+          ? `Warranty active until ${newEquipment.warranty.endDate}` 
+          : "No warranty",
+        maintenance_team_id: newEquipment.maintenanceTeam ? Number.parseInt(newEquipment.maintenanceTeam, 10) : undefined,
+        default_technician_id: newEquipment.assignedTo ? Number.parseInt(newEquipment.assignedTo, 10) : undefined,
+        is_active: newEquipment.status === "Active",
       }
-    })
+
+      const success = await createEquipment(payload)
+      if (!success) {
+        setCreateEquipmentError("Failed to create equipment")
+        return
+      }
+
+      setShowNewEquipmentForm(false)
+      setNewEquipment({
+        name: "",
+        serialNumber: "",
+        category: "",
+        department: "",
+        location: "",
+        status: "Active" as const,
+        health: 100,
+        maintenanceTeam: "",
+        assignedTo: "",
+        purchaseDate: new Date().toISOString().split('T')[0],
+        warranty: {
+          isActive: true,
+          endDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+        }
+      })
+    } catch (error) {
+      console.error("Create equipment error:", error)
+      setCreateEquipmentError("An error occurred while creating the equipment")
+    } finally {
+      setIsCreatingEquipment(false)
+    }
   }
 
   // Show equipment detail view
@@ -210,7 +269,7 @@ export function EquipmentCategories({ onBack }: { onBack: () => void }) {
             <div className="bg-white rounded-lg border p-6">
               <h3 className="text-lg font-semibold mb-4">Quick Actions</h3>
               <div className="space-y-3">
-                <Button className="w-full bg-blue-600 hover:bg-blue-700">
+                <Button className="w-full bg-blue-600 hover:bg-blue-700" onClick={handleScheduleMaintenance}>
                   <Wrench className="w-4 h-4 mr-2" />
                   Schedule Maintenance
                 </Button>
@@ -268,6 +327,12 @@ export function EquipmentCategories({ onBack }: { onBack: () => void }) {
                 <X className="w-4 h-4" />
               </Button>
             </div>
+
+            {createEquipmentError && (
+              <div className="text-sm text-red-600 mb-4">
+                {createEquipmentError}
+              </div>
+            )}
 
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -367,9 +432,11 @@ export function EquipmentCategories({ onBack }: { onBack: () => void }) {
                       <SelectValue placeholder="Select team" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="1">Mechanics</SelectItem>
-                      <SelectItem value="2">Electricians</SelectItem>
-                      <SelectItem value="3">IT Support</SelectItem>
+                      {teams.map((team) => (
+                        <SelectItem key={team.id} value={team.id.toString()}>
+                          {team.name}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -380,21 +447,26 @@ export function EquipmentCategories({ onBack }: { onBack: () => void }) {
                       <SelectValue placeholder="Select technician" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="1">John Smith</SelectItem>
-                      <SelectItem value="2">Sarah Davis</SelectItem>
-                      <SelectItem value="3">Mike Johnson</SelectItem>
-                      <SelectItem value="4">Lisa Anderson</SelectItem>
+                      {technicians.map((tech) => (
+                        <SelectItem key={tech.id} value={tech.id.toString()}>
+                          {tech.name}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
               </div>
 
               <div className="flex justify-end gap-3 pt-4">
-                <Button variant="outline" onClick={() => setShowNewEquipmentForm(false)}>
+                <Button variant="outline" onClick={() => setShowNewEquipmentForm(false)} disabled={isCreatingEquipment}>
                   Cancel
                 </Button>
-                <Button className="bg-blue-600 hover:bg-blue-700" onClick={handleSaveEquipment}>
-                  Save Equipment
+                <Button 
+                  className="bg-blue-600 hover:bg-blue-700" 
+                  onClick={handleSaveEquipment}
+                  disabled={isCreatingEquipment}
+                >
+                  {isCreatingEquipment ? "Saving..." : "Save Equipment"}
                 </Button>
               </div>
             </div>
@@ -499,6 +571,88 @@ export function EquipmentCategories({ onBack }: { onBack: () => void }) {
           <p className="text-gray-500">No equipment found matching your search.</p>
         </div>
       )}
+
+      {/* Schedule Maintenance Modal */}
+      <Dialog open={showScheduleModal} onOpenChange={setShowScheduleModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Schedule Maintenance</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="subject">Subject</Label>
+              <Input
+                id="subject"
+                value={scheduleData.subject}
+                onChange={(e) => setScheduleData({ ...scheduleData, subject: e.target.value })}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="type">Type</Label>
+                <Select value={scheduleData.request_type} onValueChange={(v) => setScheduleData({ ...scheduleData, request_type: v as any })}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Preventive">Preventive</SelectItem>
+                    <SelectItem value="Corrective">Corrective</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="priority">Priority</Label>
+                <Select value={scheduleData.priority} onValueChange={(v) => setScheduleData({ ...scheduleData, priority: v })}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Low">Low</SelectItem>
+                    <SelectItem value="Medium">Medium</SelectItem>
+                    <SelectItem value="High">High</SelectItem>
+                    <SelectItem value="Critical">Critical</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="scheduled_date">Scheduled Date</Label>
+              <Input
+                id="scheduled_date"
+                type="date"
+                value={scheduleData.scheduled_date}
+                onChange={(e) => setScheduleData({ ...scheduleData, scheduled_date: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="description">Description</Label>
+              <Textarea
+                id="description"
+                value={scheduleData.description}
+                onChange={(e) => setScheduleData({ ...scheduleData, description: e.target.value })}
+                placeholder="Describe the maintenance task..."
+              />
+            </div>
+            <div>
+              <Label htmlFor="notes">Notes</Label>
+              <Textarea
+                id="notes"
+                value={scheduleData.notes}
+                onChange={(e) => setScheduleData({ ...scheduleData, notes: e.target.value })}
+                placeholder="Additional notes..."
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowScheduleModal(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreateScheduledRequest} disabled={isScheduling}>
+              {isScheduling ? "Scheduling..." : "Schedule Maintenance"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

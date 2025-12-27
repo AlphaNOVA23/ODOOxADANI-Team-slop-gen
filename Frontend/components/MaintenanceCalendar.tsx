@@ -1,5 +1,5 @@
-import { useState } from "react"
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, User, AlertTriangle, CheckCircle } from "lucide-react"
+import { useState, useEffect } from "react"
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, User, AlertTriangle, CheckCircle, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -13,10 +13,20 @@ interface CalendarDay {
 }
 
 export function MaintenanceCalendar() {
-  const { requests, equipment, teams } = useAppStore()
+  const { requests, equipment, teams, loadAppData } = useAppStore()
   const [currentDate, setCurrentDate] = useState(new Date())
   const [selectedView, setSelectedView] = useState<'month' | 'week' | 'day'>('month')
   const [selectedFilter, setSelectedFilter] = useState('all')
+  const [isLoading, setIsLoading] = useState(false)
+
+  useEffect(() => {
+    const loadData = async () => {
+      setIsLoading(true)
+      await loadAppData()
+      setIsLoading(false)
+    }
+    loadData()
+  }, [loadAppData])
 
   // Get days in month
   const getDaysInMonth = (date: Date) => {
@@ -122,6 +132,15 @@ export function MaintenanceCalendar() {
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">Scheduled Requests</h2>
         <div className="flex items-center gap-4">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => loadAppData()}
+            disabled={isLoading}
+          >
+            <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
           <Select value={selectedFilter} onValueChange={setSelectedFilter}>
             <SelectTrigger className="w-40">
               <SelectValue />
