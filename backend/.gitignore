@@ -1,0 +1,28 @@
+# --- Python environment ---
+venv/
+.venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# --- Environment variables (Sensitive Data) ---
+.env
+
+# --- Database / Storage ---
+*.db
+*.sqlite3
+
+# --- Celery & Redis ---
+celerybeat-schedule
+*.log
+
+# --- IDEs / Editors ---
+.vscode/
+.idea/
+.DS_Store
+*.swp
+
+# --- Alembic ---
+# Keep your migrations folder, but ignore bytecode
+migrations/__pycache__/
